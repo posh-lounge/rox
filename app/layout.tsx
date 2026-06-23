@@ -8,8 +8,8 @@ import { SidebarProvider } from "@/context/SidebarContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 
 export const metadata: Metadata = {
-  title: "Personal Assistant - Smart Solutions ",
-  description: "Personal Assistant - Smart Solutions for Your Daily Tasks",
+  title: "Rox House LTD - Smart Solutions ",
+  description: "Rox House LTD - Smart Solutions for Your Management",
 };
 
 export default function RootLayout({
