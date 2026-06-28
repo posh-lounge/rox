@@ -67,6 +67,7 @@ export interface DashboardData {
 export interface User {
   user_no: number; userId: string; firstname: string; lastname: string;
   email: string; phonenumber: string; status: string; role_id: number; role_name?: string;
+  dates: string;
 }
 export interface Role { role_id: number; role_name: string; description: string; }
 
