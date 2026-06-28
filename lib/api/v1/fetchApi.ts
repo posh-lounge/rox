@@ -1,0 +1,12 @@
+// lib/api/v1/fetchApi.ts
+// ─── Base API caller ─────────────────────────────────────────
+export async function apiPost<T>(path: string, body: Record<string, unknown>): Promise<T> {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json.message || 'Request failed');
+  return json as T;
+}

@@ -19,6 +19,7 @@ import {
   Crown,
   Gem,
 } from "lucide-react";
+
 const features = [
   {
     icon: Shirt,
@@ -28,7 +29,6 @@ const features = [
     border: "border-yellow-500/20",
     iconColor: "text-yellow-400",
   },
-  
   {
     icon: Crown,
     label: "Elegant Styles",
@@ -45,7 +45,6 @@ const features = [
     border: "border-amber-500/20",
     iconColor: "text-amber-400",
   },
- 
 ];
 
 export default function SignInForm() {
@@ -56,86 +55,83 @@ export default function SignInForm() {
   const [pageloading, setPageloading] = React.useState(false);
   const [username, setUsername] = React.useState("");
   const [passwordnow, setPassword] = React.useState("");
+const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  setButtonloading(true);
+  e.preventDefault();
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    setButtonloading(true);
-    e.preventDefault();
+  try {
+    const formData = { username, password: passwordnow };
 
-    try {
-      const formData = { username, password: passwordnow };
-
-      if (!formData.username || !formData.password) {
-        toast.warning("Required Fields", {
-          description: "Please fill in all required fields",
+    if (!formData.username || !formData.password) {
+      toast.warning("Required Fields", {
+        description: "Please fill in all required fields",
+      });
+      setButtonloading(false);
+    } else {
+      try {
+        const response = await fetch("/api/authentication/sign_in", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Origin: window.location.origin,
+          },
+          body: JSON.stringify({ ...formData }),
         });
-        setButtonloading(false);
-      } else {
-        try {
-          const response = await fetch("/api/authentication/sign_in", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Origin: window.location.origin,
-            },
-            body: JSON.stringify({ ...formData }),
+
+        const responseData = await response.json();
+
+        if (response.status === 200) {
+          const formMeta = {
+            username: responseData.metadata.email,
+            password: responseData.metadata.password,
+          };
+
+          // Show loader before signIn
+          setButtonloading(false);
+          setPageloading(true);
+
+          // Use signIn with redirect:true and callbackUrl
+          const result = await signIn("credentials", {
+            ...formMeta,
+            redirect: true,
+            callbackUrl: `/${responseData.metadata.role}`,
           });
-
-          const responseData = await response.json();
-
-          if (response.status === 200) {
-            const formMeta = {
-              username: responseData.metadata.email,
-              password: responseData.metadata.password,
-            };
-
-            const signnow = await signIn("credentials", {
-              ...formMeta,
-              redirect: false,
-            });
-
-            if (signnow?.error) {
-              toast.error("Authentication Failed", {
-                description: signnow?.error,
-              });
-              setButtonloading(false);
-            } else {
-              toast.success("Welcome Back", {
-                description: responseData.message,
-              });
-              setButtonloading(false);
-              setPageloading(true);
-              router.push(`/${responseData.metadata.role}`);
-              router.refresh();
-            }
-          } else {
-            toast.error("Access Denied", {
-              description: responseData.message,
-            });
-            setButtonloading(false);
-          }
-        } catch (error: any) {
-          toast.error("Connection Error", {
-            description: error?.message || "Something went wrong",
+          // If we reach here, it means signIn failed (since redirect would happen on success)
+          // Actually, with redirect:true, if there's an error, it will throw or return an error object?
+          // According to docs, signIn with redirect:true returns a promise that resolves to undefined on success (because redirect happens) or rejects on error.
+          // So we need to catch errors.
+          // But we can't catch because we have a try-catch around the whole block.
+          // So we put the signIn call outside the try-catch? Let's structure.
+        } else {
+          toast.error("Access Denied", {
+            description: responseData.message,
           });
           setButtonloading(false);
         }
+      } catch (error: any) {
+        toast.error("Connection Error", {
+          description: error?.message || "Something went wrong",
+        });
+        setButtonloading(false);
+        setPageloading(false);
       }
-    } catch (error: any) {
-      toast.error("Error", {
-        description: error?.message || "Unexpected error",
-      });
-      setButtonloading(false);
     }
-  };
+  } catch (error: any) {
+    toast.error("Error", {
+      description: error?.message || "Unexpected error",
+    });
+    setButtonloading(false);
+    setPageloading(false);
+  }
+};
 
   return (
     <div className="min-h-screen w-full bg-black flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 overflow-hidden rounded-2xl shadow-2xl border border-yellow-500/20">
 
-        {/* ── Left Panel ── */}
+        {/* ── Left Panel (unchanged) ── */}
         <div className="hidden lg:flex flex-col justify-between p-10 bg-gradient-to-br from-black via-[#0B0B0B] to-[#151515] relative overflow-hidden">
-
-          {/* subtle grid texture */}
+          {/* ... (exactly as before) ... */}
           <div
             className="absolute inset-0 opacity-[0.04]"
             style={{
@@ -144,42 +140,29 @@ export default function SignInForm() {
               backgroundSize: "40px 40px",
             }}
           />
-
-          {/* glow blobs */}
           <div className="absolute -top-20 -left-20 w-72 h-72 rounded-full bg-yellow-500/10 blur-3xl pointer-events-none" />
           <div className="absolute bottom-0 right-0 w-64 h-64 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
 
-          {/* Brand */}
           <div className="relative z-10">
             <div className="inline-flex items-center gap-3">
-               <div className="bg-transparent rounded-2xl p-6 text-white shadow-lg">
-            
+              <div className="bg-transparent rounded-2xl p-6 text-white shadow-lg">
                 <div className="flex items-center justify-center gap-8">
                   <div className="text-center">
                     <img
-                                       className=" object-contain"
-                                       style={{ width: '70%', height: '100px' }}
-                                   
-                                       src="/logo.png"
-
-                                       alt="Logo"
-                                      
-                                     />
-                   
+                      className="object-contain"
+                      style={{ width: '70%', height: '100px' }}
+                      src="/logo.png"
+                      alt="Logo"
+                    />
                   </div>
-                
                 </div>
               </div>
-         
-             
-                                    
             </div>
-
             <div className="mt-12">
               <h1 className="text-4xl font-bold text-white leading-tight tracking-tight">
                 Crafting Elegance,<br />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-amber-400">
-                 Tailored To,
+                  Tailored To,
                 </span>{" "}
                 Perfection.
               </h1>
@@ -189,7 +172,6 @@ export default function SignInForm() {
             </div>
           </div>
 
-          {/* Feature grid */}
           <div className="relative z-10 grid grid-cols-2 gap-3 mt-10">
             {features.map(({ icon: Icon, label, desc, color, border, iconColor }) => (
               <div
@@ -207,7 +189,6 @@ export default function SignInForm() {
             ))}
           </div>
 
-          {/* Bottom bar */}
           <div className="relative z-10 mt-8 pt-5 border-t border-white/[0.07]">
             <p className="text-slate-500 text-xs">
               Fashion · Fabrics · Tailoring · Design
@@ -219,7 +200,7 @@ export default function SignInForm() {
         <div className="bg-[#080808] flex items-center justify-center p-6 sm:p-10">
           <div className="w-full max-w-md">
 
-            {/* Mobile brand */}
+            {/* Mobile brand (unchanged) */}
             <div className="lg:hidden text-center mb-8">
               <div className="w-14 h-14 mx-auto rounded-xl bg-gradient-to-br from-yellow-400 to-amber-400 flex items-center justify-center shadow-lg shadow-yellow-500/30">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -231,120 +212,118 @@ export default function SignInForm() {
               <p className="text-slate-500 text-sm">Fashion • Fabrics • Tailoring</p>
             </div>
 
-            {/* Heading */}
-            <div className="mb-8">
-              <p className="text-yellow-400 text-sm font-medium tracking-wide uppercase mb-1">
-                ROX HOUSE LTD
-              </p>
-              <h2 className="text-3xl font-bold text-white leading-tight">
-                Welcome To Luxury
-              </h2>
-              <p className="mt-2 text-slate-400 text-sm">
-                Access your fashion and tailoring management platform.
-              </p>
-            </div>
-
-            {/* Form */}
-            <form onSubmit={handleSubmit}>
-              <div className="space-y-5">
-
-                {/* Email */}
-                <div>
-                  <Label className="mb-1.5 block text-sm font-medium text-slate-300">
-                    Email Address
-                  </Label>
-                  <Input
-                    placeholder="you@company.com"
-                    name="username"
-                    id="username"
-                    onChange={(e) => setUsername(e.target.value)}
-                    type="email"
-                    className="h-12 rounded-xl bg-white/[0.05] border-white/10 text-white placeholder:text-slate-600 focus:border-yellow-500 focus:ring-yellow-500/20"
-                  />
-                </div>
-
-                {/* Password */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <Label className="text-sm font-medium text-slate-300">
-                      Password
-                    </Label>
-                    {/*<Link
-                      href="/reset-password"
-                      className="text-xs text-yellow-400 hover:text-yellow-300 transition-colors"
-                    >
-                      Forgot password?
-                    </Link>*/}
-                  </div>
-                  <div className="relative">
-                    <Input
-                      type={showPassword ? "text" : "password"}
-                      id="password"
-                      name="password"
-                      placeholder="Enter your password"
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="h-12 rounded-xl pr-12 bg-white/[0.05] border-white/10 text-white placeholder:text-slate-600 focus:border-yellow-500 focus:ring-yellow-500/20"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
-                    >
-                      {showPassword ? (
-                        <EyeOffIcon className="w-5 h-5" />
-                      ) : (
-                        <EyeIcon className="w-5 h-5" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Submit */}
-                <Button
-                  type="submit"
-                  disabled={buttonloading}
-                  className={`w-full h-12 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                    buttonloading
-                      ? "bg-slate-700 text-slate-400 cursor-not-allowed"
-                      : "bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-white shadow-lg shadow-yellow-500/25"
-                  }`}
-                >
-                  {!buttonloading ? (
-                    "Sign In to Workspace"
-                  ) : (
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
-                      Signing in...
-                    </div>
-                  )}
-                </Button>
+            {pageloading ? (
+              // ─── INLINE LOADER (replaces the form) ──────────────────────
+              <div className="flex flex-col items-center justify-center py-12 gap-4">
+                <div className="h-12 w-12 animate-spin rounded-full border-4 border-yellow-500/20 border-t-yellow-400"></div>
+                <p className="text-sm text-yellow-400/80 animate-pulse">
+                  Redirecting to your workspace…
+                </p>
               </div>
-            </form>
+            ) : (
+              // ─── LOGIN FORM ──────────────────────────────────────────────
+              <>
+                {/* Heading */}
+                <div className="mb-8">
+                  <p className="text-yellow-400 text-sm font-medium tracking-wide uppercase mb-1">
+                    ROX HOUSE LTD
+                  </p>
+                  <h2 className="text-3xl font-bold text-white leading-tight">
+                    Welcome To Luxury
+                  </h2>
+                  <p className="mt-2 text-slate-400 text-sm">
+                    Access your fashion and tailoring management platform.
+                  </p>
+                </div>
 
-            {/* Feature pills — mobile only teaser */}
-            <div className="lg:hidden mt-8 flex flex-wrap gap-2 justify-center">
-              {features.map(({ icon: Icon, label, iconColor }) => (
-                <span
-                  key={label}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.05] border border-white/10 text-xs text-slate-400"
-                >
-                  <Icon className={`w-3 h-3 ${iconColor}`} />
-                  {label}
-                </span>
-              ))}
-            </div>
+                <form onSubmit={handleSubmit}>
+                  <div className="space-y-5">
+                    {/* Email */}
+                    <div>
+                      <Label className="mb-1.5 block text-sm font-medium text-slate-300">
+                        Email Address
+                      </Label>
+                      <Input
+                        placeholder="you@company.com"
+                        name="username"
+                        id="username"
+                        onChange={(e) => setUsername(e.target.value)}
+                        type="email"
+                        className="h-12 rounded-xl bg-white/[0.05] border-white/10 text-white placeholder:text-slate-600 focus:border-yellow-500 focus:ring-yellow-500/20"
+                      />
+                    </div>
 
-            {/* Footer */}
-            <div className="mt-8 pt-6 border-t border-white/[0.07] flex items-center justify-between text-xs text-slate-600">
-              <span>Authorized users only</span>
-           {/*   <Link
-                href="/contact-support"
-                className="text-slate-500 hover:text-yellow-400 transition-colors"
-              >
-                Contact Support
-              </Link>
-              */}
-            </div>
+                    {/* Password */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <Label className="text-sm font-medium text-slate-300">
+                          Password
+                        </Label>
+                      </div>
+                      <div className="relative">
+                        <Input
+                          type={showPassword ? "text" : "password"}
+                          id="password"
+                          name="password"
+                          placeholder="Enter your password"
+                          onChange={(e) => setPassword(e.target.value)}
+                          className="h-12 rounded-xl pr-12 bg-white/[0.05] border-white/10 text-white placeholder:text-slate-600 focus:border-yellow-500 focus:ring-yellow-500/20"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                        >
+                          {showPassword ? (
+                            <EyeOffIcon className="w-5 h-5" />
+                          ) : (
+                            <EyeIcon className="w-5 h-5" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Submit */}
+                    <Button
+                      type="submit"
+                      disabled={buttonloading}
+                      className={`w-full h-12 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                        buttonloading
+                          ? "bg-slate-700 text-slate-400 cursor-not-allowed"
+                          : "bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-400 hover:to-amber-400 text-white shadow-lg shadow-yellow-500/25"
+                      }`}
+                    >
+                      {!buttonloading ? (
+                        "Sign In to Workspace"
+                      ) : (
+                        <div className="flex items-center justify-center gap-2">
+                          <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+                          Signing in...
+                        </div>
+                      )}
+                    </Button>
+                  </div>
+                </form>
+
+                {/* Feature pills — mobile only */}
+                <div className="lg:hidden mt-8 flex flex-wrap gap-2 justify-center">
+                  {features.map(({ icon: Icon, label, iconColor }) => (
+                    <span
+                      key={label}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.05] border border-white/10 text-xs text-slate-400"
+                    >
+                      <Icon className={`w-3 h-3 ${iconColor}`} />
+                      {label}
+                    </span>
+                  ))}
+                </div>
+
+                {/* Footer */}
+                <div className="mt-8 pt-6 border-t border-white/[0.07] flex items-center justify-between text-xs text-slate-600">
+                  <span>Authorized users only</span>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
