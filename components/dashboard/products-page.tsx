@@ -1,34 +1,66 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Plus, Search, Edit2, Package, AlertTriangle,
-  Filter, X, ChevronDown, Loader2, Tag, Ruler, Hash,
+  Filter, X, ChevronDown, ChevronLeft, ChevronRight,
+  Loader2, Tag, Ruler, Hash,
 } from "lucide-react";
 import { useProducts, useAddProduct, useUpdateProduct, useProductCategories, Product } from "@/lib/api/v1/hooks";
 import Skeleton from "react-loading-skeleton";
 import "react-loading-skeleton/dist/skeleton.css";
 
 const UNIT_TYPES = ["meter", "piece", "kg", "g", "liter"];
+const ITEMS_PER_PAGE = 10;
 
-function ProductModal({
-  product, categories, onClose,
-}: {
-  product?: Product | null;
-  categories: Array<{ cat_id: number; cat_name: string }>;
-  onClose: () => void;
-}) {
+// ─── Pagination ──────────────────────────────────────────────
+function Pagination({ page, total, perPage, onChange }: { page: number; total: number; perPage: number; onChange: (p: number) => void }) {
+  const totalPages = Math.ceil(total / perPage);
+  if (totalPages <= 1) return null;
+  const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+  return (
+    <div className="flex items-center justify-between px-4 py-3 border-t border-white/10">
+      <span className="text-xs text-white/30">
+        Showing {Math.min((page - 1) * perPage + 1, total)}–{Math.min(page * perPage, total)} of {total}
+      </span>
+      <div className="flex items-center gap-1">
+        <button onClick={() => onChange(page - 1)} disabled={page === 1}
+          className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 border border-white/10 text-white/50 hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition">
+          <ChevronLeft size={14} />
+        </button>
+        {pages.map(p => {
+          const isEllipsis = totalPages > 7 && p !== 1 && p !== totalPages && Math.abs(p - page) > 2;
+          if (isEllipsis && (p === 2 || p === totalPages - 1)) return <span key={p} className="text-white/20 text-xs w-6 text-center">…</span>;
+          if (isEllipsis) return null;
+          return (
+            <button key={p} onClick={() => onChange(p)}
+              className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition ${p === page ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/20" : "bg-white/5 border border-white/10 text-white/50 hover:bg-white/10 hover:text-white"}`}>
+              {p}
+            </button>
+          );
+        })}
+        <button onClick={() => onChange(page + 1)} disabled={page === totalPages}
+          className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 border border-white/10 text-white/50 hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition">
+          <ChevronRight size={14} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Product Modal ───────────────────────────────────────────
+function ProductModal({ product, categories, onClose }: { product?: Product | null; categories: Array<{ cat_id: number; cat_name: string }>; onClose: () => void }) {
   const addProduct    = useAddProduct();
   const updateProduct = useUpdateProduct();
   const isEdit        = !!product;
 
   const [form, setForm] = useState({
-    product_name:   product?.product_name ?? "",
-    category_id:    product?.category_id?.toString() ?? "",
-    unit_type:      product?.unit_type ?? "piece",
-    selling_price:  product?.selling_price?.toString() ?? "",
-    low_stock_alert:product?.low_stock_alert?.toString() ?? "5",
-    description:    product?.description ?? "",
-    status:         product?.status ?? "active",
+    product_name:    product?.product_name ?? "",
+    category_id:     product?.category_id?.toString() ?? "",
+    unit_type:       product?.unit_type ?? "piece",
+    selling_price:   product?.selling_price?.toString() ?? "",
+    low_stock_alert: product?.low_stock_alert?.toString() ?? "5",
+    description:     product?.description ?? "",
+    status:          product?.status ?? "active",
   });
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
@@ -37,8 +69,9 @@ function ProductModal({
   const handleSubmit = async () => {
     if (!form.product_name || !form.category_id || !form.selling_price) return;
     const payload = {
-      ...form, category_id: +form.category_id,
-      selling_price: +form.selling_price,
+      ...form,
+      category_id:     +form.category_id,
+      selling_price:   +form.selling_price,
       low_stock_alert: +form.low_stock_alert,
       ...(isEdit ? { product_id: product!.product_id } : {}),
     };
@@ -82,14 +115,12 @@ function ProductModal({
             <div>
               <label className="text-xs text-white/50 mb-1 block">Selling Price (RWF) *</label>
               <input type="number" value={form.selling_price} onChange={e => set("selling_price", e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"
-                placeholder="0" />
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500" placeholder="0" />
             </div>
             <div>
               <label className="text-xs text-white/50 mb-1 block">Low Stock Alert</label>
               <input type="number" value={form.low_stock_alert} onChange={e => set("low_stock_alert", e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"
-                placeholder="5" />
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500" placeholder="5" />
             </div>
           </div>
           <div>
@@ -122,11 +153,13 @@ function ProductModal({
   );
 }
 
+// ─── Main Page ───────────────────────────────────────────────
 export default function ProductsPage() {
-  const [search, setSearch]       = useState("");
+  const [search,    setSearch]    = useState("");
   const [catFilter, setCatFilter] = useState("");
-  const [modal, setModal]         = useState<"add" | "edit" | null>(null);
-  const [selected, setSelected]   = useState<Product | null>(null);
+  const [modal,     setModal]     = useState<"add" | "edit" | null>(null);
+  const [selected,  setSelected]  = useState<Product | null>(null);
+  const [page,      setPage]      = useState(1);
 
   const { data: productsData, isLoading } = useProducts({ search, category_id: catFilter });
   const { data: catsData } = useProductCategories();
@@ -134,10 +167,17 @@ export default function ProductsPage() {
   const products   = productsData?.products ?? [];
   const categories = catsData?.categories ?? [];
 
-  const openEdit = (p: Product) => { setSelected(p); setModal("edit"); };
-  const closeModal = () => { setModal(null); setSelected(null); };
+  // Client-side pagination (products are already filtered by server search+category)
+  const totalProducts  = products.length;
+  const pagedProducts  = useMemo(() => products.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE), [products, page]);
 
-  const unitIcon = (u: string) => u === "meter" ? <Ruler size={11} /> : <Hash size={11} />;
+  // Reset page when filters change
+  const handleSearch    = (v: string) => { setSearch(v);    setPage(1); };
+  const handleCatFilter = (v: string) => { setCatFilter(v); setPage(1); };
+
+  const openEdit   = (p: Product) => { setSelected(p); setModal("edit"); };
+  const closeModal = () => { setModal(null); setSelected(null); };
+  const unitIcon   = (u: string) => u === "meter" ? <Ruler size={11} /> : <Hash size={11} />;
 
   return (
     <div className="min-h-screen p-6" style={{ background: "linear-gradient(135deg,#0d1020 0%,#141827 60%,#0f1628 100%)" }}>
@@ -158,13 +198,13 @@ export default function ProductsPage() {
         <div className="flex gap-3 mb-6">
           <div className="relative flex-1 max-w-sm">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
-            <input value={search} onChange={e => setSearch(e.target.value)}
+            <input value={search} onChange={e => handleSearch(e.target.value)}
               className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500 placeholder:text-white/30"
               placeholder="Search products..." />
           </div>
           <div className="relative">
             <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
-            <select value={catFilter} onChange={e => setCatFilter(e.target.value)}
+            <select value={catFilter} onChange={e => handleCatFilter(e.target.value)}
               className="bg-white/5 border border-white/10 rounded-xl pl-9 pr-8 py-2.5 text-white/70 text-sm focus:outline-none focus:border-indigo-500 appearance-none">
               <option value="" className="bg-gray-900">All Categories</option>
               {categories.map(c => <option key={c.cat_id} value={c.cat_id} className="bg-gray-900">{c.cat_name}</option>)}
@@ -177,10 +217,10 @@ export default function ProductsPage() {
         {!isLoading && (
           <div className="grid grid-cols-4 gap-3 mb-6">
             {[
-              { label: "Total Products", value: products.length, color: "text-white" },
-              { label: "Low Stock", value: products.filter(p => p.current_quantity <= p.low_stock_alert).length, color: "text-amber-400" },
-              { label: "Out of Stock", value: products.filter(p => p.current_quantity <= 0).length, color: "text-red-400" },
-              { label: "Capital Value", value: `${products.reduce((s,p) => s + +p.capital_value, 0).toLocaleString()} RWF`, color: "text-emerald-400" },
+              { label: "Total Products", value: totalProducts, color: "text-white" },
+              { label: "Low Stock",      value: products.filter(p => p.current_quantity <= p.low_stock_alert && p.current_quantity > 0).length, color: "text-amber-400" },
+              { label: "Out of Stock",   value: products.filter(p => p.current_quantity <= 0).length, color: "text-red-400" },
+              { label: "Capital Value",  value: `${products.reduce((s, p) => s + +p.capital_value, 0).toLocaleString()} RWF`, color: "text-emerald-400" },
             ].map(s => (
               <div key={s.label} className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
                 <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
@@ -190,34 +230,34 @@ export default function ProductsPage() {
           </div>
         )}
 
-        {/* Products table */}
+        {/* Table */}
         <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
           <table className="w-full">
             <thead>
               <tr className="border-b border-white/10">
-                {["Code","Product","Category","Unit","Stock","Sell Price","Capital","Status",""].map(h => (
+                {["Code", "Product", "Category", "Unit", "Stock", "Sell Price", "Capital", "Status", ""].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-xs text-white/40 font-medium uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {isLoading
-                ? Array(6).fill(0).map((_, i) => (
+                ? Array(ITEMS_PER_PAGE).fill(0).map((_, i) => (
                     <tr key={i} className="border-b border-white/5">
                       {Array(9).fill(0).map((_, j) => (
                         <td key={j} className="px-4 py-3"><Skeleton height={16} baseColor="#1f2937" highlightColor="#374151" /></td>
                       ))}
                     </tr>
                   ))
-                : products.length === 0
+                : pagedProducts.length === 0
                 ? (
                     <tr><td colSpan={9} className="px-4 py-16 text-center text-white/30 text-sm">
                       <Package size={32} className="mx-auto mb-3 opacity-30" />
-                      No products found
+                      {search || catFilter ? "No products match your filters" : "No products found"}
                     </td></tr>
                   )
-                : products.map(p => {
-                    const isLow = p.current_quantity <= p.low_stock_alert;
+                : pagedProducts.map(p => {
+                    const isLow = p.current_quantity <= p.low_stock_alert && p.current_quantity > 0;
                     const isOut = p.current_quantity <= 0;
                     return (
                       <tr key={p.product_id} className="border-b border-white/5 hover:bg-white/3 transition group">
@@ -234,7 +274,7 @@ export default function ProductsPage() {
                         </td>
                         <td className="px-4 py-3">
                           <span className={`flex items-center gap-1 text-sm font-medium ${isOut ? "text-red-400" : isLow ? "text-amber-400" : "text-emerald-400"}`}>
-                            {isOut || isLow ? <AlertTriangle size={13} /> : null}
+                            {(isOut || isLow) && <AlertTriangle size={13} />}
                             {Number(p.current_quantity).toLocaleString()}
                           </span>
                         </td>
@@ -256,6 +296,7 @@ export default function ProductsPage() {
                   })}
             </tbody>
           </table>
+          <Pagination page={page} total={totalProducts} perPage={ITEMS_PER_PAGE} onChange={setPage} />
         </div>
       </div>
 
