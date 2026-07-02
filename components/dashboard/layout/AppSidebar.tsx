@@ -86,6 +86,16 @@ const navItems: NavItem[] = [
     path: "/dashboard/stock",
   },
 
+
+  // ── Stock ───────────────────────────────────────────────────
+  {
+    name: "Loan Account",
+    icon: <FileText size={18} />,
+    path: "/dashboard/loan-account",
+  },
+
+  
+
   // ── Reports ─────────────────────────────────────────────────
   {
     name: "Reports",
