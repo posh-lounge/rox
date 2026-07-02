@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Plus, X, Loader2, Search, Edit3, Trash2, CreditCard,
   Smartphone, Banknote, CheckCircle, AlertTriangle,
@@ -325,14 +325,15 @@ function OrderPanel({ orderId, onClose }:{ orderId:number; onClose:()=>void }) {
   const [showCheckout, setShowCheckout]= useState(false);
   const [success,      setSuccess]     = useState<{sale_ref:string;change_amount:number}|null>(null);
 
-  // Filter products by search, reset page on search change
+  // Filter products by search
   const filteredProducts = useMemo(() => {
-    setProductPage(1);
     if (!search) return products;
     const s = search.toLowerCase();
     return products.filter(p => p.product_name.toLowerCase().includes(s) || p.cat_name?.toLowerCase().includes(s));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, products]);
+
+  // Reset product page when search or products change
+  useEffect(() => { setProductPage(1); }, [search]);
 
   const totalProductPages = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE);
   const pagedProducts = filteredProducts.slice(
