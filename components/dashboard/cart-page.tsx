@@ -18,7 +18,7 @@ interface OrderItem { item_id:number; order_id:number; product_id:number; produc
 interface Product { product_id:number; product_name:string; unit_type:string; selling_price:number; available_quantity:number; current_quantity:number; low_stock_alert:number; cat_name:string; reserved_in_orders:number; }
 interface LoanAccount { loan_id:number; account_ref:string; customer_name:string; customer_phone:string; balance:number; }
 
-const PRODUCTS_PER_PAGE = 10;
+const PRODUCTS_PER_PAGE = 18;
 const ORDERS_PER_PAGE   = 10;
 
 // ─── Hooks ───────────────────────────────────────────────────
@@ -95,44 +95,95 @@ function NewOrderModal({ onClose, onCreated }:{ onClose:()=>void; onCreated:(id:
 }
 
 // ─── Qty Modal ───────────────────────────────────────────────
-function QtyModal({ product, currentQty, maxQty, onConfirm, onClose, isLoading }:{ product:Product; currentQty:number; maxQty:number; onConfirm:(q:number)=>void; onClose:()=>void; isLoading:boolean; }) {
-  const [input, setInput] = useState(currentQty>0?String(currentQty):"");
-  const [err, setErr]     = useState("");
-  const parsed  = parseFloat(input)||0;
-  const isValid = parsed>0 && parsed<=maxQty;
-  const onInput = (v:string) => { setInput(v); const n=parseFloat(v)||0; setErr(n>maxQty?`Only ${maxQty} ${product.unit_type} available`:""); };
+function QtyModal({ product, currentQty, currentPrice, maxQty, onConfirm, onClose, isLoading }:{
+  product:Product; currentQty:number; currentPrice?:number;
+  maxQty:number; onConfirm:(q:number, price:number)=>void;
+  onClose:()=>void; isLoading:boolean;
+}) {
+  const listedPrice = product.selling_price;
+  const [input,      setInput]      = useState(currentQty>0?String(currentQty):"");
+  const [priceInput, setPriceInput] = useState(String(currentPrice??listedPrice));
+  const [err,        setErr]        = useState("");
+
+  const parsed      = parseFloat(input)||0;
+  const parsedPrice = parseFloat(priceInput)||0;
+  const isValid     = parsed>0 && parsed<=maxQty && parsedPrice>0;
+  const subtotal    = parsed * parsedPrice;
+  const isCustom    = parsedPrice !== listedPrice;
+
+  const onQtyInput = (v:string) => {
+    setInput(v);
+    const n=parseFloat(v)||0;
+    setErr(n>maxQty?`Only ${maxQty} ${product.unit_type} available`:"");
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="w-full max-w-sm bg-gray-900 border border-white/10 rounded-2xl shadow-2xl">
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
           <div>
             <p className="text-white font-semibold text-sm">{product.product_name}</p>
-            <p className="text-white/40 text-xs">{maxQty} {product.unit_type} free · {Number(product.selling_price).toLocaleString()} RWF/{product.unit_type}</p>
+            <p className="text-white/40 text-xs">{maxQty} {product.unit_type} free</p>
           </div>
           <button onClick={onClose} className="text-white/40 hover:text-white"><X size={16}/></button>
         </div>
-        <div className="p-5">
-          <input autoFocus type="number" value={input} onChange={e=>onInput(e.target.value)} onKeyDown={e=>e.key==='Enter'&&isValid&&onConfirm(parsed)}
-            step={product.unit_type==='meter'?'0.1':'1'} min="0" max={maxQty}
-            className={`w-full bg-white/5 border rounded-xl px-4 py-3 text-white text-2xl font-bold text-center focus:outline-none transition ${err?'border-red-500/60':isValid?'border-indigo-500':'border-white/10'}`}
-            placeholder={product.unit_type==='meter'?'0.0':'0'}/>
-          {err&&<p className="text-xs text-red-400 mt-2 flex items-center gap-1"><AlertTriangle size={11}/>{err}</p>}
-          <div className="mt-3 h-1.5 bg-white/10 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full transition-all ${parsed>maxQty?'bg-red-500':parsed>maxQty*0.8?'bg-amber-500':'bg-indigo-500'}`} style={{width:`${Math.min(100,(parsed/maxQty)*100)}%`}}/>
+        <div className="p-5 space-y-4">
+          {/* Quantity */}
+          <div>
+            <label className="text-xs text-white/40 mb-1.5 block">Quantity ({product.unit_type})</label>
+            <input autoFocus type="number" value={input} onChange={e=>onQtyInput(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&isValid&&onConfirm(parsed,parsedPrice)}
+              step={product.unit_type==="meter"?"0.1":"1"} min="0" max={maxQty}
+              className={`w-full bg-white/5 border rounded-xl px-4 py-3 text-white text-2xl font-bold text-center focus:outline-none transition ${err?"border-red-500/60":parsed>0&&parsed<=maxQty?"border-indigo-500":"border-white/10"}`}
+              placeholder={product.unit_type==="meter"?"0.0":"0"}/>
+            {err&&<p className="text-xs text-red-400 mt-1.5 flex items-center gap-1"><AlertTriangle size={11}/>{err}</p>}
+            <div className="mt-2 h-1.5 bg-white/10 rounded-full overflow-hidden">
+              <div className={`h-full rounded-full transition-all ${parsed>maxQty?"bg-red-500":parsed>maxQty*0.8?"bg-amber-500":"bg-indigo-500"}`} style={{width:`${Math.min(100,(parsed/maxQty)*100)}%`}}/>
+            </div>
+            <div className="flex justify-between text-xs text-white/20 mt-1"><span>0</span><span>{maxQty} {product.unit_type}</span></div>
           </div>
-          <div className="flex justify-between text-xs text-white/20 mt-1"><span>0</span><span>{maxQty} {product.unit_type}</span></div>
+
+          {/* Custom price */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-xs text-white/40">Price per {product.unit_type} (RWF)</label>
+              <div className="flex items-center gap-2">
+                {isCustom&&<span className="text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">Custom</span>}
+                <span className="text-[10px] text-white/25">Listed: {Number(listedPrice).toLocaleString()}</span>
+              </div>
+            </div>
+            <div className="relative">
+              <input type="number" value={priceInput} onChange={e=>setPriceInput(e.target.value)} min="0"
+                className={`w-full bg-white/5 border rounded-xl px-4 py-2.5 text-white text-sm font-medium focus:outline-none transition ${isCustom?"border-amber-500/50 focus:border-amber-500":"border-white/10 focus:border-indigo-500"}`}
+                placeholder="0"/>
+              {isCustom&&(
+                <button onClick={()=>setPriceInput(String(listedPrice))}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-white/30 hover:text-white/70 transition underline">
+                  reset
+                </button>
+              )}
+            </div>
+            {isCustom&&listedPrice>0&&parsedPrice<listedPrice&&(
+              <p className="text-[10px] text-amber-400 mt-1">↓ {Math.round((1-parsedPrice/listedPrice)*100)}% below listed price</p>
+            )}
+            {isCustom&&parsedPrice>listedPrice&&(
+              <p className="text-[10px] text-emerald-400 mt-1">↑ {Math.round((parsedPrice/listedPrice-1)*100)}% above listed price</p>
+            )}
+          </div>
+
+          {/* Subtotal preview */}
           {isValid&&(
-            <div className="mt-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl px-4 py-2.5 flex justify-between">
-              <span className="text-indigo-300 text-sm">Subtotal</span>
-              <span className="text-indigo-300 font-bold">{(parsed*product.selling_price).toLocaleString()} RWF</span>
+            <div className={`rounded-xl px-4 py-2.5 flex justify-between border ${isCustom?"bg-amber-500/10 border-amber-500/20":"bg-indigo-500/10 border-indigo-500/20"}`}>
+              <span className={`text-sm ${isCustom?"text-amber-300":"text-indigo-300"}`}>Subtotal</span>
+              <span className={`font-bold ${isCustom?"text-amber-300":"text-indigo-300"}`}>{subtotal.toLocaleString()} RWF</span>
             </div>
           )}
         </div>
         <div className="flex gap-3 px-5 pb-5">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/60 text-sm hover:bg-white/10 transition">Cancel</button>
-          <button onClick={()=>onConfirm(parsed)} disabled={!isValid||isLoading}
+          <button onClick={()=>onConfirm(parsed,parsedPrice)} disabled={!isValid||isLoading}
             className="flex-1 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white text-sm font-medium transition flex items-center justify-center gap-2 disabled:opacity-40">
-            {isLoading&&<Loader2 size={13} className="animate-spin"/>}{currentQty>0?'Update':'Add'}
+            {isLoading&&<Loader2 size={13} className="animate-spin"/>}{currentQty>0?"Update":"Add"}
           </button>
         </div>
       </div>
@@ -321,7 +372,7 @@ function OrderPanel({ orderId, onClose }:{ orderId:number; onClose:()=>void }) {
 
   const [search,       setSearch]      = useState('');
   const [productPage,  setProductPage] = useState(1);
-  const [qtyModal,     setQtyModal]    = useState<{product:Product;currentQty:number}|null>(null);
+  const [qtyModal,     setQtyModal]    = useState<{product:Product;currentQty:number;currentPrice?:number}|null>(null);
   const [showCheckout, setShowCheckout]= useState(false);
   const [success,      setSuccess]     = useState<{sale_ref:string;change_amount:number}|null>(null);
 
@@ -343,9 +394,9 @@ function OrderPanel({ orderId, onClose }:{ orderId:number; onClose:()=>void }) {
 
   const itemQty = (pid:number) => items.find(i=>i.product_id===pid)?.quantity??0;
 
-  const handleQtyConfirm = async (qty:number) => {
+  const handleQtyConfirm = async (qty:number, price:number) => {
     if (!qtyModal) return;
-    await orderAction.mutateAsync({ action:'add_item', order_id:orderId, product_id:qtyModal.product.product_id, quantity:qty });
+    await orderAction.mutateAsync({ action:'add_item', order_id:orderId, product_id:qtyModal.product.product_id, quantity:qty, unit_price:price });
     setQtyModal(null);
   };
 
@@ -433,7 +484,7 @@ function OrderPanel({ orderId, onClose }:{ orderId:number; onClose:()=>void }) {
                     const isOut   = avail<=0 && inOrder===0;
                     return (
                       <button key={p.product_id}
-                        onClick={()=>!isOut&&setQtyModal({product:p,currentQty:inOrder})}
+                        onClick={()=>!isOut&&setQtyModal({product:p,currentQty:inOrder,currentPrice:items.find(i=>i.product_id===p.product_id)?.unit_price})}
                         disabled={isOut}
                         className={`text-left p-3 rounded-xl border transition ${
                           isOut?'opacity-40 cursor-not-allowed bg-white/3 border-white/5':
@@ -485,7 +536,7 @@ function OrderPanel({ orderId, onClose }:{ orderId:number; onClose:()=>void }) {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <button
-                    onClick={()=>{const p=products.find(x=>x.product_id===item.product_id); if(p) setQtyModal({product:p,currentQty:item.quantity});}}
+                    onClick={()=>{const p=products.find(x=>x.product_id===item.product_id); if(p) setQtyModal({product:p,currentQty:item.quantity,currentPrice:item.unit_price});}}
                     className="flex items-center gap-1 px-1.5 py-0.5 bg-white/8 border border-white/10 rounded-lg hover:border-indigo-500/40 transition">
                     <span className="text-xs font-bold text-white">{item.quantity}</span>
                     <Edit3 size={9} className="text-white/30"/>
@@ -516,6 +567,7 @@ function OrderPanel({ orderId, onClose }:{ orderId:number; onClose:()=>void }) {
         <QtyModal
           product={qtyModal.product}
           currentQty={qtyModal.currentQty}
+          currentPrice={qtyModal.currentPrice}
           maxQty={qtyModal.product.available_quantity}
           isLoading={orderAction.isPending}
           onConfirm={handleQtyConfirm}
