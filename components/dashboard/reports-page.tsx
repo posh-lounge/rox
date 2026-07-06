@@ -1,7 +1,7 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell, Legend } from "recharts";
-import { TrendingUp, DollarSign, ShoppingBag, BarChart2, Download } from "lucide-react";
+import { TrendingUp, DollarSign, ShoppingBag, BarChart2, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import { useReport } from "@/lib/api/v1/hooks";
 import Skeleton from "react-loading-skeleton";
 
@@ -9,6 +9,8 @@ const COLORS = ["#6366f1","#10b981","#f59e0b","#ef4444","#8b5cf6"];
 
 const fmtCurrency = (n: number) => `${Number(n).toLocaleString()} RWF`;
 const fmtShort = (n: number) => n >= 1000000 ? `${(n/1000000).toFixed(1)}M` : n >= 1000 ? `${(n/1000).toFixed(1)}K` : String(n);
+
+const PAGE_SIZE_OPTIONS = [5, 10, 25, 50];
 
 function StatCard({ label, value, sub, color = "text-white" }: { label: string; value: string; sub?: string; color?: string }) {
   return (
@@ -39,6 +41,30 @@ export default function ReportsPage() {
   const margin = summary.total_revenue > 0
     ? ((summary.total_profit / summary.total_revenue) * 100).toFixed(1)
     : "0.0";
+
+  // --- Pagination state for Product Performance table ---
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const totalPages = Math.max(1, Math.ceil(byProduct.length / pageSize));
+
+  const paginatedProducts = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return byProduct.slice(start, start + pageSize);
+  }, [byProduct, page, pageSize]);
+
+  // Reset to page 1 whenever the underlying data set changes (new filters, new page size)
+  useEffect(() => {
+    setPage(1);
+  }, [dateFrom, dateTo, groupBy, pageSize]);
+
+  // Clamp page if data shrinks below current page (e.g. after refetch)
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [totalPages, page]);
+
+  const startIdx = byProduct.length === 0 ? 0 : (page - 1) * pageSize + 1;
+  const endIdx = Math.min(page * pageSize, byProduct.length);
 
   return (
     <div className="min-h-screen p-6" style={{ background: "linear-gradient(135deg,#0d1020 0%,#141827 60%,#0f1628 100%)" }}>
@@ -140,8 +166,22 @@ export default function ReportsPage() {
 
         {/* Product breakdown table */}
         <div className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-white/10">
+          <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between">
             <h3 className="text-sm font-medium text-white">Product Performance</h3>
+            {!isLoading && byProduct.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-white/30">Rows</span>
+                <select
+                  value={pageSize}
+                  onChange={e => setPageSize(Number(e.target.value))}
+                  className="bg-white/5 border border-white/10 rounded-lg px-2 py-1 text-xs text-white/70 focus:outline-none focus:border-indigo-500"
+                >
+                  {PAGE_SIZE_OPTIONS.map(size => (
+                    <option key={size} value={size} className="bg-[#141827]">{size}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
           <table className="w-full">
             <thead>
@@ -160,7 +200,7 @@ export default function ReportsPage() {
                   ))
                 : byProduct.length === 0
                 ? <tr><td colSpan={7} className="px-4 py-12 text-center text-white/30 text-sm">No sales in this period</td></tr>
-                : byProduct.map((p: any, i: number) => (
+                : paginatedProducts.map((p: any, i: number) => (
                     <tr key={i} className="border-b border-white/5 hover:bg-white/3 transition">
                       <td className="px-4 py-3 text-sm font-medium text-white">{p.product_name}</td>
                       <td className="px-4 py-3 text-xs text-white/40">{p.unit_type}</td>
@@ -182,6 +222,34 @@ export default function ReportsPage() {
                   ))}
             </tbody>
           </table>
+
+          {/* Pagination controls */}
+          {!isLoading && byProduct.length > 0 && (
+            <div className="flex items-center justify-between px-5 py-3 border-t border-white/10">
+              <p className="text-xs text-white/30">
+                Showing {startIdx}–{endIdx} of {byProduct.length}
+              </p>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-white/50 hover:text-white hover:border-white/20 transition disabled:opacity-30 disabled:hover:text-white/50 disabled:hover:border-white/10"
+                >
+                  <ChevronLeft size={14} />
+                </button>
+                <span className="text-xs text-white/50 px-2">
+                  Page {page} of {totalPages}
+                </span>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="p-1.5 rounded-lg bg-white/5 border border-white/10 text-white/50 hover:text-white hover:border-white/20 transition disabled:opacity-30 disabled:hover:text-white/50 disabled:hover:border-white/10"
+                >
+                  <ChevronRight size={14} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
