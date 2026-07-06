@@ -49,7 +49,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ success: null, message: `Failed to fetch Account: ${response.status}` }, { status: 500 });
       }
     }
-console.log('Account fetched successfully:', data);
+
     return NextResponse.json({ success: true, message: data.message , metadata: data.metadata }, { status: 200 });
 
   } catch (error: any) {

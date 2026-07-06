@@ -18,7 +18,7 @@ interface OrderItem { item_id:number; order_id:number; product_id:number; produc
 interface Product { product_id:number; product_name:string; unit_type:string; selling_price:number; available_quantity:number; current_quantity:number; low_stock_alert:number; cat_name:string; reserved_in_orders:number; }
 interface LoanAccount { loan_id:number; account_ref:string; customer_name:string; customer_phone:string; balance:number; }
 
-const PRODUCTS_PER_PAGE = 18;
+const PRODUCTS_PER_PAGE = 10;
 const ORDERS_PER_PAGE   = 10;
 
 // ─── Hooks ───────────────────────────────────────────────────

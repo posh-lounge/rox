@@ -37,7 +37,7 @@ export const authOptions: NextAuthOptions = {
       
 
           if (!response.ok) {
-            console.log("Authorization failed:", data.message);
+          
             return null;
           }
 
