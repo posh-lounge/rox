@@ -143,6 +143,30 @@ export interface User {
 
 export interface Role { role_id: number; role_name: string; description: string; }
 
+export interface Purchase {
+  purchase_id: number; purchase_ref: string; product_id: number;
+  product_name?: string; unit_type?: string; quantity: number;
+  remaining_quantity: number; unit_cost: number; total_cost: number;
+  supplier_name: string; notes: string; created_by: string; created_at: string;
+  updated_by?: string; updated_at?: string;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// EDIT PURCHASE
+// ═══════════════════════════════════════════════════════════════
+
+
+export const useEditPurchase = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (d: Partial<Purchase>) => apiPost('/api/main/dashboard/update/update-purchase', d as Record<string, unknown>),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['purchases'] });
+      qc.invalidateQueries({ queryKey: ['products'] });
+      qc.invalidateQueries({ queryKey: ['available-stock'] });
+    },
+  });
+};
 // ═══════════════════════════════════════════════════════════════
 // PRODUCTS
 // ═══════════════════════════════════════════════════════════════
