@@ -179,6 +179,17 @@ export default function ProductsPage() {
   const closeModal = () => { setModal(null); setSelected(null); };
   const unitIcon   = (u: string) => u === "meter" ? <Ruler size={11} /> : <Hash size={11} />;
 
+  // NOTE: current_quantity / low_stock_alert / capital_value can arrive from the
+  // API as strings (common with JSON/decimal DB columns). Comparing strings with
+  // <= / > does lexicographic comparison ("20" <= "5" is true!), which caused the
+  // low-stock flag to misfire. Always coerce to Number(...) before comparing.
+  const isLowStock = (p: Product) => {
+    const qty = Number(p.current_quantity);
+    const alert = Number(p.low_stock_alert);
+    return qty <= alert && qty > 0;
+  };
+  const isOutOfStock = (p: Product) => Number(p.current_quantity) <= 0;
+
   return (
     <div className="min-h-screen p-6" style={{ background: "linear-gradient(135deg,#0d1020 0%,#141827 60%,#0f1628 100%)" }}>
       <div className="max-w-7xl mx-auto">
@@ -218,9 +229,9 @@ export default function ProductsPage() {
           <div className="grid grid-cols-4 gap-3 mb-6">
             {[
               { label: "Total Products", value: totalProducts, color: "text-white" },
-              { label: "Low Stock",      value: products.filter(p => p.current_quantity <= p.low_stock_alert && p.current_quantity > 0).length, color: "text-amber-400" },
-              { label: "Out of Stock",   value: products.filter(p => p.current_quantity <= 0).length, color: "text-red-400" },
-              { label: "Capital Value",  value: `${products.reduce((s, p) => s + +p.capital_value, 0).toLocaleString()} RWF`, color: "text-emerald-400" },
+              { label: "Low Stock",      value: products.filter(isLowStock).length, color: "text-amber-400" },
+              { label: "Out of Stock",   value: products.filter(isOutOfStock).length, color: "text-red-400" },
+              { label: "Capital Value",  value: `${products.reduce((s, p) => s + Number(p.capital_value), 0).toLocaleString()} RWF`, color: "text-emerald-400" },
             ].map(s => (
               <div key={s.label} className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
                 <p className={`text-lg font-bold ${s.color}`}>{s.value}</p>
@@ -257,8 +268,9 @@ export default function ProductsPage() {
                     </td></tr>
                   )
                 : pagedProducts.map(p => {
-                    const isLow = p.current_quantity <= p.low_stock_alert && p.current_quantity > 0;
-                    const isOut = p.current_quantity <= 0;
+                    const qty  = Number(p.current_quantity);
+                    const isLow = isLowStock(p);
+                    const isOut = isOutOfStock(p);
                     return (
                       <tr key={p.product_id} className="border-b border-white/5 hover:bg-white/3 transition group">
                         <td className="px-4 py-3 text-xs text-white/30 font-mono">{p.product_code}</td>
@@ -275,7 +287,7 @@ export default function ProductsPage() {
                         <td className="px-4 py-3">
                           <span className={`flex items-center gap-1 text-sm font-medium ${isOut ? "text-red-400" : isLow ? "text-amber-400" : "text-emerald-400"}`}>
                             {(isOut || isLow) && <AlertTriangle size={13} />}
-                            {Number(p.current_quantity).toLocaleString()}
+                            {qty.toLocaleString()}
                           </span>
                         </td>
                         <td className="px-4 py-3 text-sm text-white">{Number(p.selling_price).toLocaleString()} RWF</td>
