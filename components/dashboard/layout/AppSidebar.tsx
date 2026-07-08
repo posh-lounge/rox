@@ -79,6 +79,13 @@ const navItems: NavItem[] = [
     path: "/dashboard/spaces",
   },
 
+    // ── Expenses ───────────────────────────────────────────────────
+  {
+    name: "Expenses",
+    icon: <GridIcon size={18} />,
+    path: "/dashboard/expenses",
+  },
+
   // ── Stock ───────────────────────────────────────────────────
   {
     name: "Stock",

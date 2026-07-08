@@ -445,15 +445,7 @@ export const useDashboard = () =>
     refetchInterval: 60000,
   });
 
-// ═══════════════════════════════════════════════════════════════
-// REPORTS
-// ═══════════════════════════════════════════════════════════════
 
-export const useReport = (filters: { date_from: string; date_to: string; group_by?: string }) =>
-  useQuery({
-    queryKey: ['report', filters],
-    queryFn: () => apiPost<Record<string, unknown>>('/api/main/dashboard/fetch/fetch-report', filters),
-  });
 
 // ═══════════════════════════════════════════════════════════════
 // USERS & ROLES
@@ -477,5 +469,150 @@ export const useUpdateUserRole = () => {
     mutationFn: (d: { target_user_id: string; role_id: number }) =>
       apiPost('/api/main/dashboard/update/update-user-role', d as Record<string, unknown>),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+  });
+};
+
+// ─────────────────────────────────────────────────────────────
+// ADD THESE TO YOUR EXISTING hooks.ts
+// (paste after the existing REPORTS section)
+// ─────────────────────────────────────────────────────────────
+
+// ═══════════════════════════════════════════════════════════════
+// TYPES  — add to the types section at the top of hooks.ts
+// ═══════════════════════════════════════════════════════════════
+
+export interface ExpenseCategory {
+  cat_id: number;
+  cat_name: string;
+  color: string;
+  sort_order: number;
+}
+
+export interface Expense {
+  expense_id: number;
+  expense_ref: string;
+  cat_id: number;
+  cat_name: string;
+  color: string;
+  title: string;
+  amount: number;
+  expense_date: string;
+  payment_method: string;
+  payment_reference: string | null;
+  vendor: string | null;
+  notes: string | null;
+  created_by: string;
+  created_at: string;
+}
+
+export interface ExpenseSummaryByCategory {
+  cat_name: string;
+  color: string;
+  total: number;
+  cnt: number;
+}
+
+// ── Updated report response type ─────────────────────────────
+export interface ReportSummary {
+  // Sales
+  total_sales: number;
+  total_revenue: number;
+  total_discounts: number;
+  // COGS / gross
+  cogs: number;
+  gross_profit: number;
+  gross_margin_pct: number;
+  // Purchases (stock bought in period)
+  total_purchases: number;
+  total_purchase_cost: number;
+  // Operational expenses
+  total_op_expenses: number;
+  // Combined
+  total_all_expenses: number;
+  // Net P&L
+  net_profit: number;
+  net_margin_pct: number;
+  // Legacy keys (kept so nothing breaks)
+  total_profit: number;
+  total_cost: number;
+}
+
+export interface ReportTimeSeries {
+  period: string;
+  revenue: number;
+  cogs: number;
+  purchases: number;
+  expenses: number;
+  total_out: number;
+  gross_profit: number;
+  net_profit: number;
+  sales_count: number;
+}
+
+export interface ReportData {
+  success: boolean;
+  summary: ReportSummary;
+  time_series: ReportTimeSeries[];
+  by_product: Array<{
+    product_name: string; unit_type: string;
+    qty_sold: number; revenue: number; cost: number; profit: number; margin_pct: number;
+  }>;
+  by_payment: Array<{ payment_method: string; cnt: number; revenue: number }>;
+  capital: { remaining_capital: number };
+  expenses_by_category: ExpenseSummaryByCategory[];
+  expense_rows: Expense[];
+  purchases_by_product: Array<{
+    product_name: string; unit_type: string;
+    qty_purchased: number; total_cost: number; avg_unit_cost: number;
+  }>;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// REPLACE the existing useReport hook with this typed version
+// ═══════════════════════════════════════════════════════════════
+
+export const useReport = (filters: { date_from: string; date_to: string; group_by?: string }) =>
+  useQuery({
+    queryKey: ['report', filters],
+    queryFn: () => apiPost<ReportData>('/api/main/dashboard/fetch/fetch-report', filters),
+  });
+
+// ═══════════════════════════════════════════════════════════════
+// NEW — EXPENSES  (add after the REPORTS section)
+// ═══════════════════════════════════════════════════════════════
+
+export const useExpenseCategories = () =>
+  useQuery({
+    queryKey: ['expense-categories'],
+    queryFn: () => apiPost<{ categories: ExpenseCategory[] }>(
+      '/api/main/dashboard/create/expense-action',
+      { action: 'list_categories' }
+    ),
+    staleTime: 10 * 60_000, // categories rarely change
+  });
+
+export const useExpenses = (filters?: {
+  date_from?: string;
+  date_to?: string;
+  cat_id?: number | null;
+  search?: string;
+}) =>
+  useQuery({
+    queryKey: ['expenses', filters],
+    queryFn: () => apiPost<{ expenses: Expense[]; by_category: ExpenseSummaryByCategory[]; total: number }>(
+      '/api/main/dashboard/create/expense-action',
+      { action: 'list', ...filters }
+    ),
+  });
+
+export const useExpenseAction = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (d: Record<string, unknown>) =>
+      apiPost('/api/main/dashboard/create/expense-action', d),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['expenses'] });
+      qc.invalidateQueries({ queryKey: ['report'] });  // report totals change too
+    },
   });
 };
