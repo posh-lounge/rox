@@ -173,9 +173,9 @@ function PaymentModal({ account, onClose }:{ account:LoanAccount; onClose:()=>vo
   );
 }
 
-// ─── Edit Payment Modal ───────────────────────────────────────
+// EditPaymentModal — now uses useLoanMutation instead of useAccountAction
 function EditPaymentModal({ payment, onClose }:{ payment:LoanPayment; onClose:()=>void }) {
-  const acctAction = useAccountAction();
+  const mut = useLoanMutation();
   const [amount, setAmount] = useState(String(payment.amount));
   const [method, setMethod] = useState(payment.payment_method);
   const [ref,    setRef]    = useState(payment.payment_reference ?? '');
@@ -183,7 +183,7 @@ function EditPaymentModal({ payment, onClose }:{ payment:LoanPayment; onClose:()
 
   const save = async () => {
     if (!amount || +amount <= 0) return;
-    await acctAction.mutateAsync({
+    await mut.mutateAsync({
       action:            'edit_loan_payment',
       payment_id:        payment.payment_id,
       amount:            +amount,
@@ -230,9 +230,9 @@ function EditPaymentModal({ payment, onClose }:{ payment:LoanPayment; onClose:()
         </div>
         <div className="flex gap-3 px-6 pb-6">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/60 text-sm hover:bg-white/10 transition">Cancel</button>
-          <button onClick={save} disabled={acctAction.isPending||!amount||+amount<=0}
+          <button onClick={save} disabled={mut.isPending||!amount||+amount<=0}
             className="flex-1 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white text-sm font-medium transition flex items-center justify-center gap-2 disabled:opacity-40">
-            {acctAction.isPending&&<Loader2 size={14} className="animate-spin"/>}Save Changes
+            {mut.isPending&&<Loader2 size={14} className="animate-spin"/>}Save Changes
           </button>
         </div>
       </div>
@@ -240,11 +240,11 @@ function EditPaymentModal({ payment, onClose }:{ payment:LoanPayment; onClose:()
   );
 }
 
-// ─── Delete Payment Confirm ───────────────────────────────────
+// DeletePaymentConfirm — now uses useLoanMutation instead of useAccountAction
 function DeletePaymentConfirm({ payment, onClose }:{ payment:LoanPayment; onClose:()=>void }) {
-  const acctAction = useAccountAction();
+  const mut = useLoanMutation();
   const del = async () => {
-    await acctAction.mutateAsync({ action:'delete_loan_payment', payment_id:payment.payment_id });
+    await mut.mutateAsync({ action:'delete_loan_payment', payment_id:payment.payment_id });
     onClose();
   };
   return (
@@ -258,16 +258,15 @@ function DeletePaymentConfirm({ payment, onClose }:{ payment:LoanPayment; onClos
         <p className="text-white/30 text-xs mb-5">The loan balance will be adjusted automatically.</p>
         <div className="flex gap-3">
           <button onClick={onClose} className="flex-1 py-2.5 border border-white/10 text-white/50 rounded-xl text-sm hover:border-white/20 transition">Cancel</button>
-          <button onClick={del} disabled={acctAction.isPending}
+          <button onClick={del} disabled={mut.isPending}
             className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white rounded-xl text-sm font-semibold transition flex items-center justify-center gap-2">
-            {acctAction.isPending&&<Loader2 size={13} className="animate-spin"/>}Delete
+            {mut.isPending&&<Loader2 size={13} className="animate-spin"/>}Delete
           </button>
         </div>
       </div>
     </div>
   );
 }
-
 // ─── Account Detail ───────────────────────────────────────────
 function AccountDetail({ accountId, onBack }:{ accountId:number; onBack:()=>void }) {
   const { data, isLoading } = useDetail(accountId);
