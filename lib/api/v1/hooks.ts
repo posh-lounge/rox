@@ -76,6 +76,101 @@ export interface LoanPayment {
   firstname?: string; lastname?: string;
 }
 
+// ─────────────────────────────────────────────────────────────
+// Add these to your existing hooks.ts file
+// ─────────────────────────────────────────────────────────────
+
+// ── TYPES ─────────────────────────────────────────────────────
+
+export interface AccountBalance {
+  method:        'cash' | 'momo' | 'pos';
+  label:         string;
+  income:        number;
+  from_sales:    number;
+  from_loans:    number;
+  from_spaces:   number;
+  expenses:      number;
+  withdrawals:   number;
+  transfers_out: number;
+  transfers_in:  number;
+  balance:       number;
+}
+
+export interface AccountTransaction {
+  txn_id:       number;
+  txn_ref:      string;
+  txn_type:     'transfer' | 'withdrawal';
+  from_account: 'cash' | 'momo' | 'pos';
+  to_account:   'cash' | 'momo' | 'pos' | null;
+  amount:       number;
+  reason:       string;
+  notes:        string | null;
+  created_by:   string;
+  created_at:   string;
+  firstname?:   string;
+  lastname?:    string;
+}
+
+// ── ACCOUNTS HOOK ──────────────────────────────────────────────
+export const useAccounts = () =>
+  useQuery({
+    queryKey: ['accounts'],
+    queryFn:  () => apiPost<{
+      success:      boolean;
+      balances:     AccountBalance[];
+      grand_total:  number;
+      recent_txns:  AccountTransaction[];
+      monthly:      any[];
+    }>('/api/main/dashboard/fetch/fetch-accounts', {}),
+    refetchInterval: 30_000,  // refresh every 30s
+  });
+
+export const useAccountTransactions = (filters?: {
+  txn_type?: string;
+  account?:  string;
+  date_from?: string;
+  date_to?:   string;
+}) =>
+  useQuery({
+    queryKey: ['account-transactions', filters],
+    queryFn:  () => apiPost<{ transactions: AccountTransaction[] }>(
+      '/api/main/dashboard/create/account-action',
+      { action: 'list_transactions', ...filters }
+    ),
+  });
+
+export const useAccountAction = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) =>
+      apiPost('/api/main/dashboard/create/account-action', body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['accounts'] });
+      qc.invalidateQueries({ queryKey: ['account-transactions'] });
+    },
+  });
+};
+
+// ── UPDATED LOAN ACTION (now includes edit + delete payment) ──
+// Replace your existing useLoanAction with this
+export const useLoanAction = () => {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) =>
+      apiPost('/api/main/dashboard/create/loan-action', body),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ['loan-accounts'] });
+      qc.invalidateQueries({ queryKey: ['loan-detail'] });
+      qc.invalidateQueries({ queryKey: ['loan-search'] });
+      // Also refresh accounts if payment edited/deleted
+      if (['edit_loan_payment','delete_loan_payment'].includes(variables.action as string)) {
+        qc.invalidateQueries({ queryKey: ['accounts'] });
+      }
+    },
+  });
+};
+
+
 // ─── Spaces ──────────────────────────────────────────────────
 export interface Space {
   space_id: number; space_name: string; space_type: string;
@@ -328,17 +423,6 @@ export const useLoanDetail = (loanId: number | null) =>
     ),
   });
 
-export const useLoanAction = () => {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: (d: Record<string, unknown>) => apiPost('/api/main/dashboard/create/loan-action', d),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['loan-accounts'] });
-      qc.invalidateQueries({ queryKey: ['loan-detail'] });
-      qc.invalidateQueries({ queryKey: ['loan-search'] });
-    },
-  });
-};
 
 // ═══════════════════════════════════════════════════════════════
 // SPACES

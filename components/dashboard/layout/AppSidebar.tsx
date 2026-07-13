@@ -74,7 +74,7 @@ const navItems: NavItem[] = [
 
   // ── Spaces ──────────────────────────────────────────────────
   {
-    name: "Spaces",
+    name: "Spaces Room",
     icon: <Building2 size={18} />,
     path: "/dashboard/spaces",
   },
@@ -88,9 +88,9 @@ const navItems: NavItem[] = [
 
   // ── Stock ───────────────────────────────────────────────────
   {
-    name: "Stock",
+    name: "Balances",
     icon: <Boxes size={18} />,
-    path: "/dashboard/stock",
+    path: "/dashboard/balances",
   },
 
 

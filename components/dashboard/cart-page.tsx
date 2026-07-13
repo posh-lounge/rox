@@ -22,11 +22,11 @@ const PRODUCTS_PER_PAGE = 10;
 const ORDERS_PER_PAGE   = 10;
 
 // ─── Hooks ───────────────────────────────────────────────────
-const useOrders = () => useQuery({ queryKey:['orders'], queryFn:()=>apiPost<{orders:Order[]}>('/api/main/dashboard/create/order-action',{action:'list'}), refetchInterval:10000 });
-const useOrderDetail = (id:number|null) => useQuery({ queryKey:['order',id], enabled:!!id, queryFn:()=>apiPost<{order:Order;items:OrderItem[];total:number}>('/api/main/dashboard/create/order-action',{action:'fetch_order',order_id:id}), refetchInterval:8000 });
+const useOrders         = () => useQuery({ queryKey:['orders'], queryFn:()=>apiPost<{orders:Order[]}>('/api/main/dashboard/create/order-action',{action:'list'}), refetchInterval:10000 });
+const useOrderDetail    = (id:number|null) => useQuery({ queryKey:['order',id], enabled:!!id, queryFn:()=>apiPost<{order:Order;items:OrderItem[];total:number}>('/api/main/dashboard/create/order-action',{action:'fetch_order',order_id:id}), refetchInterval:8000 });
 const useAvailableStock = (orderId:number|null) => useQuery({ queryKey:['available-stock',orderId], queryFn:()=>apiPost<{products:Product[]}>('/api/main/dashboard/fetch/fetch-available-stock',{order_id:orderId}), refetchInterval:12000 });
-const useOrderAction = () => { const qc=useQueryClient(); return useMutation({ mutationFn:(d:Record<string,unknown>)=>apiPost('/api/main/dashboard/create/order-action',d), onSuccess:(_,v:any)=>{ qc.invalidateQueries({queryKey:['orders']}); if(v.order_id||v.action) qc.invalidateQueries({queryKey:['order']}); qc.invalidateQueries({queryKey:['available-stock']}); } }); };
-const useLoanSearch = (q:string) => useQuery({ queryKey:['loan-search',q], enabled:q.length>1, queryFn:()=>apiPost<{accounts:LoanAccount[]}>('/api/main/dashboard/create/loan-action',{action:'search',query:q}) });
+const useOrderAction    = () => { const qc=useQueryClient(); return useMutation({ mutationFn:(d:Record<string,unknown>)=>apiPost('/api/main/dashboard/create/order-action',d), onSuccess:(_,v:any)=>{ qc.invalidateQueries({queryKey:['orders']}); if(v.order_id||v.action) qc.invalidateQueries({queryKey:['order']}); qc.invalidateQueries({queryKey:['available-stock']}); } }); };
+const useLoanSearch     = (q:string) => useQuery({ queryKey:['loan-search',q], enabled:q.length>1, queryFn:()=>apiPost<{accounts:LoanAccount[]}>('/api/main/dashboard/create/loan-action',{action:'search',query:q}) });
 
 // ─── Mini Pagination ─────────────────────────────────────────
 function Pagination({ page, total, perPage, onChange }:{ page:number; total:number; perPage:number; onChange:(p:number)=>void }) {
@@ -191,11 +191,12 @@ function QtyModal({ product, currentQty, currentPrice, maxQty, onConfirm, onClos
   );
 }
 
-// ─── Checkout Modal ──────────────────────────────────────────
-function CheckoutModal({ order, items, total, onClose, onSuccess }:{ order:Order; items:OrderItem[]; total:number; onClose:()=>void; onSuccess:(ref:string,change:number)=>void; }) {
+// ─── Checkout Modal ───────────────────────────────────────────
+// No "Amount Received" input. Customer pays exactly what they owe.
+// paid_amount = net is set by the backend automatically.
+function CheckoutModal({ order, items, total, onClose, onSuccess }:{ order:Order; items:OrderItem[]; total:number; onClose:()=>void; onSuccess:(ref:string)=>void; }) {
   const createSale = useCreateSale();
   const [method,       setMethod]      = useState<'cash'|'momo'|'pos'|'loan'>('cash');
-  const [paid,         setPaid]        = useState('');
   const [discount,     setDiscount]    = useState('0');
   const [customer,     setCustomer]    = useState(order.order_name);
   const [phone,        setPhone]       = useState('');
@@ -206,32 +207,30 @@ function CheckoutModal({ order, items, total, onClose, onSuccess }:{ order:Order
   const { data: loanData } = useLoanSearch(loanQuery);
   const loanAccounts = loanData?.accounts ?? [];
 
-  const disc    = parseFloat(discount)||0;
-  const net     = total - disc;
-  const paidAmt = parseFloat(paid)||0;
-  const change  = Math.max(0, paidAmt - net);
-  const canConfirm = method==='loan' ? !!selectedLoan : method==='cash' ? paidAmt>=net : true;
+  const disc       = parseFloat(discount)||0;
+  const net        = total - disc;
+  const canConfirm = method==='loan' ? !!selectedLoan : net > 0;
 
   const payMethods = [
-    {id:'cash',label:'Cash',icon:<Banknote size={15}/>},
-    {id:'momo',label:'MoMo',icon:<Smartphone size={15}/>},
-    {id:'pos', label:'POS', icon:<CreditCard size={15}/>},
-    {id:'loan',label:'Loan',icon:<ShoppingBag size={15}/>},
+    {id:'cash', label:'Cash', icon:<Banknote  size={15}/>},
+    {id:'momo', label:'MoMo', icon:<Smartphone size={15}/>},
+    {id:'pos',  label:'POS',  icon:<CreditCard size={15}/>},
+    {id:'loan', label:'Loan', icon:<ShoppingBag size={15}/>},
   ] as const;
 
   const handle = async () => {
-    const res:any = await createSale.mutateAsync({
-      order_id: order.order_id,
-      items: items.map(i=>({product_id:i.product_id,quantity:i.quantity,unit_price:i.unit_price})),
+    await createSale.mutateAsync({
+      order_id:          order.order_id,
+      items:             items.map(i=>({product_id:i.product_id,quantity:i.quantity,unit_price:i.unit_price})),
       customer_name:     customer||order.order_name,
       customer_phone:    phone||null,
       payment_method:    method,
       payment_reference: payRef||null,
-      paid_amount:       method==='cash'?paidAmt:net,
       discount_amount:   disc,
       loan_id:           method==='loan'?selectedLoan?.loan_id:null,
+      // paid_amount intentionally omitted — backend always sets it to net
     });
-    onSuccess(res.sale_ref, res.change_amount);
+    onSuccess(order.order_ref);
   };
 
   return (
@@ -242,6 +241,8 @@ function CheckoutModal({ order, items, total, onClose, onSuccess }:{ order:Order
           <button onClick={onClose} className="text-white/40 hover:text-white"><X size={18}/></button>
         </div>
         <div className="p-6 space-y-4 max-h-[78vh] overflow-y-auto">
+
+          {/* Order summary */}
           <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-1.5">
             {items.map(i=>(
               <div key={i.item_id} className="flex justify-between text-sm">
@@ -249,19 +250,34 @@ function CheckoutModal({ order, items, total, onClose, onSuccess }:{ order:Order
                 <span className="text-white font-medium">{Number(i.subtotal).toLocaleString()} RWF</span>
               </div>
             ))}
+            {disc>0&&(
+              <div className="flex justify-between text-sm text-red-400">
+                <span>Discount</span><span>− {disc.toLocaleString()} RWF</span>
+              </div>
+            )}
             <div className="border-t border-white/10 pt-2 flex justify-between font-bold">
-              <span className="text-white">Total</span>
-              <span className="text-indigo-400">{net.toLocaleString()} RWF</span>
+              <span className="text-white">Amount Due</span>
+              <span className="text-indigo-400 text-lg">{net.toLocaleString()} RWF</span>
             </div>
           </div>
+
+          {/* Customer details */}
           <div className="grid grid-cols-2 gap-3">
             <div><label className="text-xs text-white/40 mb-1 block">Customer Name</label>
-              <input value={customer} onChange={e=>setCustomer(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"/></div>
+              <input value={customer} onChange={e=>setCustomer(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"/></div>
             <div><label className="text-xs text-white/40 mb-1 block">Phone</label>
-              <input value={phone} onChange={e=>setPhone(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500 placeholder:text-white/20" placeholder="07..."/></div>
+              <input value={phone} onChange={e=>setPhone(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500 placeholder:text-white/20"
+                placeholder="07..."/></div>
           </div>
+
+          {/* Discount */}
           <div><label className="text-xs text-white/40 mb-1 block">Discount (RWF)</label>
-            <input type="number" value={discount} onChange={e=>setDiscount(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"/></div>
+            <input type="number" min="0" value={discount} onChange={e=>setDiscount(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"/></div>
+
+          {/* Payment method */}
           <div>
             <label className="text-xs text-white/40 mb-2 block">Payment Method</label>
             <div className="grid grid-cols-4 gap-2">
@@ -273,6 +289,8 @@ function CheckoutModal({ order, items, total, onClose, onSuccess }:{ order:Order
               ))}
             </div>
           </div>
+
+          {/* Loan account picker */}
           {method==='loan'&&(
             <div>
               <label className="text-xs text-white/40 mb-1 block">Search Loan Account</label>
@@ -304,26 +322,23 @@ function CheckoutModal({ order, items, total, onClose, onSuccess }:{ order:Order
               <p className="text-xs text-white/30 mt-1">The full amount will be added to this account's debt</p>
             </div>
           )}
+
+          {/* MoMo / POS reference */}
           {(method==='momo'||method==='pos')&&(
             <div><label className="text-xs text-white/40 mb-1 block">{method==='momo'?'MoMo Transaction ID':'POS Receipt Number'}</label>
               <input value={payRef} onChange={e=>setPayRef(e.target.value)}
                 className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500 placeholder:text-white/20"
-                placeholder="Reference..."/></div>
+                placeholder="Reference (optional)..."/></div>
           )}
+
+          {/* Cash — show exact amount to collect, no input needed */}
           {method==='cash'&&(
-            <>
-              <div><label className="text-xs text-white/40 mb-1 block">Amount Received (RWF)</label>
-                <input type="number" value={paid} onChange={e=>setPaid(e.target.value)}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
-                  placeholder={String(net)}/></div>
-              {paidAmt>=net&&paidAmt>0&&(
-                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3 flex justify-between">
-                  <span className="text-emerald-300 text-sm">Change</span>
-                  <span className="text-emerald-300 font-bold text-lg">{change.toLocaleString()} RWF</span>
-                </div>
-              )}
-            </>
+            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 flex items-center justify-between">
+              <span className="text-emerald-300 text-sm font-medium">Collect from customer</span>
+              <span className="text-emerald-300 font-bold text-xl">{net.toLocaleString()} RWF</span>
+            </div>
           )}
+
         </div>
         <div className="px-6 pb-6 flex gap-3">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/60 text-sm hover:bg-white/10 transition">Cancel</button>
@@ -337,8 +352,9 @@ function CheckoutModal({ order, items, total, onClose, onSuccess }:{ order:Order
   );
 }
 
-// ─── Success Modal ───────────────────────────────────────────
-function SuccessModal({ saleRef, change, onClose }:{ saleRef:string; change:number; onClose:()=>void }) {
+// ─── Success Modal ────────────────────────────────────────────
+// No change display — payment is always exact
+function SuccessModal({ saleRef, onClose }:{ saleRef:string; onClose:()=>void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
       <div className="w-full max-w-sm bg-gray-900 border border-white/10 rounded-2xl p-8 text-center">
@@ -346,20 +362,14 @@ function SuccessModal({ saleRef, change, onClose }:{ saleRef:string; change:numb
           <CheckCircle size={28} className="text-emerald-400"/>
         </div>
         <h2 className="text-white font-bold text-xl mb-1">Sale Complete!</h2>
-        <p className="text-white/40 text-sm mb-4">Ref: <span className="text-white font-mono">{saleRef}</span></p>
-        {change>0&&(
-          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-4 py-3 mb-4">
-            <p className="text-emerald-300 text-sm">Change to give</p>
-            <p className="text-emerald-300 font-bold text-2xl">{change.toLocaleString()} RWF</p>
-          </div>
-        )}
+        <p className="text-white/40 text-sm mb-6">Ref: <span className="text-white font-mono">{saleRef}</span></p>
         <button onClick={onClose} className="w-full py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-medium transition">Done</button>
       </div>
     </div>
   );
 }
 
-// ─── Order Detail Panel ──────────────────────────────────────
+// ─── Order Detail Panel ───────────────────────────────────────
 function OrderPanel({ orderId, onClose }:{ orderId:number; onClose:()=>void }) {
   const { data, isLoading } = useOrderDetail(orderId);
   const { data: stockData } = useAvailableStock(orderId);
@@ -374,16 +384,14 @@ function OrderPanel({ orderId, onClose }:{ orderId:number; onClose:()=>void }) {
   const [productPage,  setProductPage] = useState(1);
   const [qtyModal,     setQtyModal]    = useState<{product:Product;currentQty:number;currentPrice?:number}|null>(null);
   const [showCheckout, setShowCheckout]= useState(false);
-  const [success,      setSuccess]     = useState<{sale_ref:string;change_amount:number}|null>(null);
+  const [success,      setSuccess]     = useState<string|null>(null);
 
-  // Filter products by search
   const filteredProducts = useMemo(() => {
     if (!search) return products;
     const s = search.toLowerCase();
     return products.filter(p => p.product_name.toLowerCase().includes(s) || p.cat_name?.toLowerCase().includes(s));
   }, [search, products]);
 
-  // Reset product page when search or products change
   useEffect(() => { setProductPage(1); }, [search]);
 
   const totalProductPages = Math.ceil(filteredProducts.length / PRODUCTS_PER_PAGE);
@@ -435,9 +443,8 @@ function OrderPanel({ orderId, onClose }:{ orderId:number; onClose:()=>void }) {
       </div>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* ── Left: product grid with pagination ── */}
+        {/* ── Left: product grid ── */}
         <div className="flex-1 flex flex-col overflow-hidden border-r border-white/10">
-          {/* Search */}
           <div className="p-3 border-b border-white/5">
             <div className="relative">
               <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-white/30"/>
@@ -446,7 +453,6 @@ function OrderPanel({ orderId, onClose }:{ orderId:number; onClose:()=>void }) {
             </div>
           </div>
 
-          {/* Product count + page info */}
           {!isLoading&&filteredProducts.length>0&&(
             <div className="px-3 pt-2 flex items-center justify-between">
               <span className="text-[10px] text-white/25">
@@ -454,14 +460,11 @@ function OrderPanel({ orderId, onClose }:{ orderId:number; onClose:()=>void }) {
                 {search&&` matching "${search}"`}
               </span>
               {totalProductPages>1&&(
-                <span className="text-[10px] text-white/25">
-                  Page {productPage} of {totalProductPages}
-                </span>
+                <span className="text-[10px] text-white/25">Page {productPage} of {totalProductPages}</span>
               )}
             </div>
           )}
 
-          {/* Grid */}
           <div className="flex-1 overflow-y-auto p-3">
             {isLoading?(
               <div className="grid grid-cols-2 gap-2">
@@ -506,14 +509,7 @@ function OrderPanel({ orderId, onClose }:{ orderId:number; onClose:()=>void }) {
                     );
                   })}
                 </div>
-
-                {/* Product pagination */}
-                <Pagination
-                  page={productPage}
-                  total={filteredProducts.length}
-                  perPage={PRODUCTS_PER_PAGE}
-                  onChange={setProductPage}
-                />
+                <Pagination page={productPage} total={filteredProducts.length} perPage={PRODUCTS_PER_PAGE} onChange={setProductPage}/>
               </>
             )}
           </div>
@@ -574,19 +570,21 @@ function OrderPanel({ orderId, onClose }:{ orderId:number; onClose:()=>void }) {
           onClose={()=>setQtyModal(null)}/>
       )}
       {showCheckout&&order&&(
-        <CheckoutModal order={order} items={items} total={total}
+        <CheckoutModal
+          order={order} items={items} total={total}
           onClose={()=>setShowCheckout(false)}
-          onSuccess={(ref,chg)=>{setShowCheckout(false);setSuccess({sale_ref:ref,change_amount:chg});}}/>
+          onSuccess={(ref)=>{setShowCheckout(false);setSuccess(ref);}}/>
       )}
       {success&&(
-        <SuccessModal saleRef={success.sale_ref} change={success.change_amount}
+        <SuccessModal
+          saleRef={success}
           onClose={()=>{setSuccess(null);onClose();}}/>
       )}
     </div>
   );
 }
 
-// ─── Main Page ───────────────────────────────────────────────
+// ─── Main Page ────────────────────────────────────────────────
 export default function CartPage() {
   const { data, isLoading } = useOrders();
   const orders = (data?.orders??[]) as Order[];
@@ -596,7 +594,6 @@ export default function CartPage() {
   const [orderPage,     setOrderPage]     = useState(1);
   const [orderSearch,   setOrderSearch]   = useState('');
 
-  // Filter + paginate orders sidebar
   const filteredOrders = useMemo(() => {
     if (!orderSearch) return orders;
     const s = orderSearch.toLowerCase();
@@ -609,7 +606,6 @@ export default function CartPage() {
     orderPage * ORDERS_PER_PAGE
   );
 
-  // Reset page when search changes
   const handleOrderSearch = (v:string) => { setOrderSearch(v); setOrderPage(1); };
 
   return (
@@ -634,7 +630,6 @@ export default function CartPage() {
             </button>
           </div>
 
-          {/* Order search — only shows if >ORDERS_PER_PAGE orders */}
           {orders.length > ORDERS_PER_PAGE && (
             <div className="px-3 pt-3">
               <div className="relative">
@@ -680,14 +675,7 @@ export default function CartPage() {
                     </p>
                   </button>
                 ))}
-
-                {/* Orders pagination */}
-                <Pagination
-                  page={orderPage}
-                  total={filteredOrders.length}
-                  perPage={ORDERS_PER_PAGE}
-                  onChange={setOrderPage}
-                />
+                <Pagination page={orderPage} total={filteredOrders.length} perPage={ORDERS_PER_PAGE} onChange={setOrderPage}/>
               </>
             )}
           </div>
