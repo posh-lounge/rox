@@ -124,44 +124,151 @@ function OccupyModal({ space, onClose }:{ space:Space; onClose:()=>void }) {
     </div>
   );
 }
+// ─── Payment Modal (fixed) ───────────────────────────────────
+function PaymentModal({
+  space,
+  occupancyId,
+  onClose,
+}: {
+  space: Space;
+  occupancyId?: number;   // <-- explicitly passed from current occupancy
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const [form, setForm] = useState({
+    amount: space.agreed_price?.toString() ?? "",
+    payment_method: "cash" as "cash" | "momo" | "pos",
+    payment_reference: "",
+    period_covered_from: new Date().toISOString().split("T")[0],
+    period_covered_to: "",
+    notes: "",
+  });
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
-// ─── Payment Modal ───────────────────────────────────────────
-function PaymentModal({ space, onClose }:{ space:Space; onClose:()=>void }) {
-  const qc=useQueryClient();
-  const [form,setForm]=useState({amount:space.agreed_price?.toString()??'',payment_method:'cash' as 'cash'|'momo'|'pos',payment_reference:'',period_covered_from:new Date().toISOString().split('T')[0],period_covered_to:'',notes:''});
-  const set=(k:string,v:string)=>setForm(f=>({...f,[k]:v}));
-  const mut=useMutation({mutationFn:(d:Record<string,unknown>)=>apiPost('/api/main/dashboard/create/add-space-payment',d),onSuccess:()=>{qc.invalidateQueries({queryKey:['spaces']});qc.invalidateQueries({queryKey:['space-detail']});}});
-  const handle=async()=>{ if(!form.amount||!form.period_covered_to) return; await mut.mutateAsync({space_id:space.space_id,occupancy_id:space.occupancy_id,...form,amount:+form.amount}); onClose(); };
-  const isOverdue = space.is_overdue===1;
+  const mut = useMutation({
+    mutationFn: (d: Record<string, unknown>) =>
+      apiPost("/api/main/dashboard/create/add-space-payment", d),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["spaces"] });
+      qc.invalidateQueries({ queryKey: ["space-detail"] });
+    },
+  });
+
+  const handle = async () => {
+    if (!form.amount || !form.period_covered_to) return;
+    // Use the passed occupancyId, fallback to space.occupancy_id (just in case)
+    const occId = occupancyId ?? space.occupancy_id;
+    if (!occId) {
+      alert("No active occupancy found for this space.");
+      return;
+    }
+    await mut.mutateAsync({
+      space_id: space.space_id,
+      occupancy_id: occId,
+      ...form,
+      amount: +form.amount,
+    });
+    onClose();
+  };
+
+  const isOverdue = space.is_overdue === 1;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="w-full max-w-md bg-gray-900 border border-white/10 rounded-2xl shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/10">
-          <div><h2 className="text-white font-semibold">Record Payment</h2><p className="text-xs text-white/40">{space.space_name} · {space.tenant_name}{isOverdue&&<span className="text-red-400 ml-1">· Overdue</span>}</p></div>
-          <button onClick={onClose} className="text-white/40 hover:text-white"><X size={18}/></button>
+          <div>
+            <h2 className="text-white font-semibold">Record Payment</h2>
+            <p className="text-xs text-white/40">
+              {space.space_name} · {space.tenant_name}
+              {isOverdue && <span className="text-red-400 ml-1">· Overdue</span>}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-white/40 hover:text-white">
+            <X size={18} />
+          </button>
         </div>
         <div className="p-6 space-y-4">
-          <div><label className="text-xs text-white/50 mb-1 block">Amount (RWF)</label><input type="number" value={form.amount} onChange={e=>set('amount',e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"/></div>
+          <div>
+            <label className="text-xs text-white/50 mb-1 block">Amount (RWF)</label>
+            <input
+              type="number"
+              value={form.amount}
+              onChange={(e) => set("amount", e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"
+            />
+          </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><label className="text-xs text-white/50 mb-1 block">Period From</label><input type="date" value={form.period_covered_from} onChange={e=>set('period_covered_from',e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"/></div>
-            <div><label className="text-xs text-white/50 mb-1 block">Period To</label><input type="date" value={form.period_covered_to} onChange={e=>set('period_covered_to',e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"/></div>
+            <div>
+              <label className="text-xs text-white/50 mb-1 block">Period From</label>
+              <input
+                type="date"
+                value={form.period_covered_from}
+                onChange={(e) => set("period_covered_from", e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-white/50 mb-1 block">Period To</label>
+              <input
+                type="date"
+                value={form.period_covered_to}
+                onChange={(e) => set("period_covered_to", e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500"
+              />
+            </div>
           </div>
-          <div><label className="text-xs text-white/50 mb-2 block">Payment Method</label>
-            <div className="grid grid-cols-3 gap-2">{PAY_METHODS.map(m=><button key={m.id} onClick={()=>set('payment_method',m.id)} className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-sm transition ${form.payment_method===m.id?'bg-indigo-500/20 border-indigo-500 text-indigo-300':'bg-white/5 border-white/10 text-white/50 hover:border-white/20'}`}>{m.icon}{m.label}</button>)}</div>
+          <div>
+            <label className="text-xs text-white/50 mb-2 block">Payment Method</label>
+            <div className="grid grid-cols-3 gap-2">
+              {PAY_METHODS.map((m) => (
+                <button
+                  key={m.id}
+                  onClick={() => set("payment_method", m.id)}
+                  className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl border text-sm transition ${
+                    form.payment_method === m.id
+                      ? "bg-indigo-500/20 border-indigo-500 text-indigo-300"
+                      : "bg-white/5 border-white/10 text-white/50 hover:border-white/20"
+                  }`}
+                >
+                  {m.icon}
+                  {m.label}
+                </button>
+              ))}
+            </div>
           </div>
-          {form.payment_method!=='cash'&&<div><label className="text-xs text-white/50 mb-1 block">Reference</label><input value={form.payment_reference} onChange={e=>set('payment_reference',e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500 placeholder:text-white/20" placeholder="Transaction ID..."/></div>}
+          {form.payment_method !== "cash" && (
+            <div>
+              <label className="text-xs text-white/50 mb-1 block">Reference</label>
+              <input
+                value={form.payment_reference}
+                onChange={(e) => set("payment_reference", e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-indigo-500 placeholder:text-white/20"
+                placeholder="Transaction ID..."
+              />
+            </div>
+          )}
         </div>
         <div className="flex gap-3 px-6 pb-6">
-          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/60 text-sm hover:bg-white/10 transition">Cancel</button>
-          <button onClick={handle} disabled={mut.isPending||!form.period_covered_to} className="flex-1 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white text-sm font-medium transition flex items-center justify-center gap-2 disabled:opacity-50">
-            {mut.isPending&&<Loader2 size={14} className="animate-spin"/>}Record Payment
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white/60 text-sm hover:bg-white/10 transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handle}
+            disabled={mut.isPending || !form.period_covered_to}
+            className="flex-1 py-2.5 rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white text-sm font-medium transition flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {mut.isPending && <Loader2 size={14} className="animate-spin" />}
+            Record Payment
           </button>
         </div>
       </div>
     </div>
   );
 }
-
 // ─── End Occupancy Confirmation ──────────────────────────────
 function EndOccupancyModal({ space, onClose }:{ space:Space; onClose:()=>void }) {
   const qc=useQueryClient();
@@ -309,7 +416,13 @@ function SpaceDetailView({ spaceId, onBack }:{ spaceId:number; onBack:()=>void }
       </div>
 
       {modal==='occupy'   &&space&&<OccupyModal   space={space} onClose={()=>setModal(null)}/>}
-      {modal==='payment'  &&space&&<PaymentModal  space={space} onClose={()=>setModal(null)}/>}
+      {modal === "payment" && space && (
+  <PaymentModal
+    space={space}
+    occupancyId={current?.occupancy_id}   // <-- pass the active occupancy ID
+    onClose={() => setModal(null)}
+  />
+)}
       {modal==='end'      &&space&&<EndOccupancyModal space={space} onClose={()=>setModal(null)}/>}
     </div>
   );
